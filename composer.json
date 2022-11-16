@@ -1,0 +1,18 @@
+{
+    "name": "micilini/video-stream",
+    "description": "Video Stream with PHP",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Micilini\\VideoStream\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Micilini"
+        }
+    ],
+    "minimum-stability": "dev",
+    "require": {}
+}
