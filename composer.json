@@ -1,6 +1,5 @@
 {
     "name": "micilini/video-stream",
-	"version": "2.2.0",
     "description": "PHP video streaming library with HTTP Range support and optional disk cache. Works standalone or with Laravel.",
     "type": "library",
     "license": "MIT",
