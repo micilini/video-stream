@@ -1,18 +1,44 @@
 {
     "name": "micilini/video-stream",
-    "description": "Video Stream with PHP",
+	"version": "2.2.0",
+    "description": "PHP video streaming library with HTTP Range support and optional disk cache. Works standalone or with Laravel.",
     "type": "library",
     "license": "MIT",
+    "keywords": ["video", "streaming", "range-request", "php", "laravel", "cache"],
+    "require": {
+        "php": "^8.2",
+        "ext-curl": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0|^11.0",
+        "orchestra/testbench": "^8.0|^9.0|^10.0",
+        "phpstan/phpstan": "^1.10",
+        "friendsofphp/php-cs-fixer": "^3.0"
+    },
+    "suggest": {
+        "symfony/http-foundation": "Required for ->stream() to return StreamedResponse (^6.0|^7.0)",
+        "illuminate/support": "Required for Laravel integration — Facade, Service Provider, Config (^10.0|^11.0|^12.0|^13.0)"
+    },
     "autoload": {
         "psr-4": {
             "Micilini\\VideoStream\\": "src/"
         }
     },
-    "authors": [
-        {
-            "name": "Micilini"
+    "autoload-dev": {
+        "psr-4": {
+            "Micilini\\VideoStream\\Tests\\": "tests/"
         }
-    ],
-    "minimum-stability": "dev",
-    "require": {}
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Micilini\\VideoStream\\Laravel\\VideoStreamServiceProvider"
+            ],
+            "aliases": {
+                "VideoStream": "Micilini\\VideoStream\\Laravel\\VideoStreamFacade"
+            }
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
 }

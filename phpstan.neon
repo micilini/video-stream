@@ -1,0 +1,11 @@
+parameters:
+    level: 8
+    paths:
+        - src
+    excludePaths:
+        - src/Laravel
+    ignoreErrors:
+        # header() and exit calls in HTTP context are intentional
+        - '#Function header\(\) has no return value#'
+        # $_SERVER superglobal access
+        - '#Variable \$_SERVER might not be defined#'
