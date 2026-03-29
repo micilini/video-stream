@@ -33,18 +33,4 @@ final readonly class StreamConfig
         $this->expires = $expires ?? gmdate('D, d M Y H:i:s', time() + 2592000) . ' GMT';
         $this->lastModified = $lastModified ?? gmdate('D, d M Y H:i:s') . ' GMT';
     }
-
-    public static function fromLegacyOptions(array $options, ?string $filePath = null): self
-    {
-        return new self(
-            bufferSize: isset($options['video_buffer']) ? (int) $options['video_buffer'] : 262144,
-            contentType: $options['content_type'] ?? 'video/mp4',
-            cacheControl: $options['cache_control'] ?? 'max-age=2592000, public',
-            expires: $options['expires'] ?? null,
-            lastModified: $options['last_modified']
-                ?? ($filePath && @filemtime($filePath)
-                    ? gmdate('D, d M Y H:i:s', filemtime($filePath)) . ' GMT'
-                    : null),
-        );
-    }
 }

@@ -52,36 +52,18 @@ final class StreamConfigTest extends TestCase
         $this->assertSame(1024, $config->bufferSize);
     }
 
-    public function test_from_legacy_options_with_defaults(): void
+    public function test_last_modified_can_be_defined_manually(): void
     {
-        $config = StreamConfig::fromLegacyOptions([]);
+        $config = new StreamConfig(
+            lastModified: 'Mon, 01 Jan 2024 00:00:00 GMT',
+        );
 
-        $this->assertSame(262144, $config->bufferSize);
-        $this->assertSame('video/mp4', $config->contentType);
+        $this->assertSame('Mon, 01 Jan 2024 00:00:00 GMT', $config->lastModified);
     }
 
-    public function test_from_legacy_options_with_custom_values(): void
+    public function test_default_last_modified_is_generated_in_gmt(): void
     {
-        $config = StreamConfig::fromLegacyOptions([
-            'video_buffer' => 1048576,
-            'content_type' => 'video/webm',
-            'cache_control' => 'private',
-        ]);
-
-        $this->assertSame(1048576, $config->bufferSize);
-        $this->assertSame('video/webm', $config->contentType);
-        $this->assertSame('private', $config->cacheControl);
-    }
-
-    public function test_from_legacy_options_with_file_path(): void
-    {
-        $path = $this->fixturePath('sample.mp4');
-
-        if (!file_exists($path)) {
-            $this->markTestSkipped('Fixture sample.mp4 not found');
-        }
-
-        $config = StreamConfig::fromLegacyOptions([], $path);
+        $config = new StreamConfig();
 
         $this->assertNotEmpty($config->lastModified);
         $this->assertStringContainsString('GMT', $config->lastModified);

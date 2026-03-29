@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Video Stream — Pure PHP</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: #0f0f0f;
+            color: #e0e0e0;
+            font-family: 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 32px 16px;
+        }
+
+        h1 {
+            font-size: 1.4rem;
+            font-weight: 400;
+            letter-spacing: 0.05em;
+            color: #aaa;
+            margin-bottom: 10px;
+        }
+
+        h1 span { color: #fff; font-weight: 700; }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 24px;
+            font-size: 0.9rem;
+        }
+
+        .controls {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            padding: 24px;
+            width: 100%;
+            max-width: 1000px;
+            margin-bottom: 24px;
+        }
+
+        .tab-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            background: transparent;
+            color: #aaa;
+            cursor: pointer;
+            font-size: 0.88rem;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            background: #fff;
+            color: #000;
+            border-color: #fff;
+            font-weight: 600;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 10px 14px;
+            background: #111;
+            border: 1px solid #333;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.95rem;
+            outline: none;
+            min-width: 160px;
+        }
+
+        button.play-btn {
+            padding: 10px 22px;
+            background: #fff;
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.95rem;
+            cursor: pointer;
+        }
+
+        .player-wrapper {
+            width: 100%;
+            max-width: 1000px;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            aspect-ratio: 16/9;
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .status {
+            margin-top: 12px;
+            font-size: 0.82rem;
+            color: #666;
+            max-width: 1000px;
+            width: 100%;
+            word-break: break-all;
+        }
+
+        .status.error { color: #e55; }
+        .status.ok { color: #5a5; }
+
+        .box {
+            margin-top: 16px;
+            width: 100%;
+            max-width: 1000px;
+            background: #111;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            padding: 16px;
+            color: #9f9f9f;
+            font-size: 0.82rem;
+            overflow: auto;
+        }
+    </style>
+</head>
+<body>
+
+<h1><span>VideoStream</span> — Pure PHP</h1>
+<div class="subtitle">Tests: local, cache, token, events, rate limiting and .vtt subtitles</div>
+
+<div class="controls">
+    <div class="tab-group">
+        <button class="tab active" data-mode="local-stream" onclick="setMode('local-stream', this)">📁 Local Via Stream</button>
+        <button class="tab" data-mode="local-with-subtitles" onclick="setMode('local-with-subtitles', this)">💬 Local + Subtitles</button>
+        <button class="tab" data-mode="remote-no-cache" onclick="setMode('remote-no-cache', this)">🌐 Remote Without Cache</button>
+        <button class="tab" data-mode="remote-no-cache-with-subtitles" onclick="setMode('remote-no-cache-with-subtitles', this)">🌐💬 Remote Without Cache + Subtitles</button>
+        <button class="tab" data-mode="remote-cache" onclick="setMode('remote-cache', this)">⚡ Remote With Cache</button>
+        <button class="tab" data-mode="remote-cache-with-subtitles" onclick="setMode('remote-cache-with-subtitles', this)">⚡💬 Remote With Cache + Subtitles</button>
+        <button class="tab" data-mode="remote-token" onclick="setMode('remote-token', this)">🔐 Remote With Token</button>
+        <button class="tab" data-mode="remote-cache-token" onclick="setMode('remote-cache-token', this)">🛡️ Cache + Token</button>
+        <button class="tab" data-mode="remote-rate-limit" onclick="setMode('remote-rate-limit', this)">🌪️ Remote + Rate Limit</button>
+        <button class="tab" data-mode="remote-cache-rate-limit" onclick="setMode('remote-cache-rate-limit', this)">🧱 Cache + Rate Limit</button>
+        <button class="tab" data-mode="remote-token-rate-limit" onclick="setMode('remote-token-rate-limit', this)">🔐🧱 Token + Rate Limit</button>
+        <button class="tab" type="button" onclick="loadEvents()">📜 View Events</button>
+        <button class="tab" type="button" onclick="clearEvents()">🧹 Clear Events</button>
+        <button class="tab" type="button" onclick="clearRevokedTokens()">🧼 Clear Revoked Tokens</button>
+    </div>
+
+    <div class="input-group" style="margin-bottom:10px;">
+        <input type="text" id="inputValue" value="sample.mp4" placeholder="Local file name, e.g. sample.mp4" />
+        <button class="play-btn" onclick="play()">▶ Play</button>
+    </div>
+
+    <div class="input-group" style="margin-bottom:10px;">
+        <input type="text" id="videoIdInput" value="demo-video" placeholder="Video ID for token, e.g. demo-video" />
+        <input type="text" id="ttlInput" value="3600" placeholder="TTL in seconds" style="max-width:160px;" />
+        <button class="play-btn" type="button" onclick="generateTokenManually()">🎫 Generate Token</button>
+        <button class="play-btn" type="button" onclick="generateShortToken()">⏱️ 5s Token</button>
+        <button class="play-btn" type="button" onclick="revokeCurrentToken()">🚫 Revoke Token</button>
+    </div>
+
+    <div class="input-group">
+        <input type="text" id="maxConcurrentInput" value="1" placeholder="Max Concurrent" style="max-width:180px;" />
+        <input type="text" id="maxPerMinuteInput" value="2" placeholder="Max / Minute" style="max-width:180px;" />
+    </div>
+</div>
+
+<div class="player-wrapper">
+    <video id="player" controls preload="metadata"></video>
+</div>
+
+<div class="status" id="status">Waiting...</div>
+
+<pre id="eventsBox" class="box" style="min-height:160px;">No events loaded yet.</pre>
+<pre id="tokenBox" class="box" style="min-height:100px;">No token generated yet.</pre>
+<pre id="subtitlesBox" class="box" style="min-height:100px;">No subtitles loaded yet.</pre>
+
+<script>
+    const PURE_BASE = 'index.php';
+    const REMOTE_VIDEO = 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+
+    let currentMode = 'local-stream';
+    let currentToken = null;
+    let currentTokenMeta = null;
+    let currentSubtitles = [];
+
+    function setMode(mode, button) {
+        currentMode = mode;
+
+        document.querySelectorAll('.tab[data-mode]').forEach(tab => tab.classList.remove('active'));
+
+        if (button && button.dataset.mode) {
+            button.classList.add('active');
+        }
+
+        const input = document.getElementById('inputValue');
+
+        if (mode === 'local-stream' || mode === 'local-with-subtitles') {
+            input.placeholder = 'Local file name, e.g. sample.mp4';
+            input.value = 'sample.mp4';
+        } else {
+            input.placeholder = 'Full remote video URL';
+            input.value = REMOTE_VIDEO;
+        }
+    }
+
+    async function play() {
+        const input = document.getElementById('inputValue').value.trim();
+        const videoId = document.getElementById('videoIdInput').value.trim();
+        const ttl = parseInt(document.getElementById('ttlInput').value.trim() || '3600', 10);
+        const maxConcurrent = parseInt(document.getElementById('maxConcurrentInput').value.trim() || '1', 10);
+        const maxPerMinute = parseInt(document.getElementById('maxPerMinuteInput').value.trim() || '2', 10);
+        const player = document.getElementById('player');
+
+        if (!input) {
+            setStatus('⚠️ Fill in the field before pressing play.', 'error');
+            return;
+        }
+
+        let url = '';
+
+        if (
+            currentMode === 'remote-token' ||
+            currentMode === 'remote-cache-token' ||
+            currentMode === 'remote-token-rate-limit'
+        ) {
+            if (!currentToken) {
+                try {
+                    currentToken = await generateToken(videoId, ttl);
+                } catch (error) {
+                    setStatus('Error generating token: ' + error.message, 'error');
+                    return;
+                }
+            }
+        }
+
+        switch (currentMode) {
+            case 'local-stream':
+                url = `${PURE_BASE}?action=local&file=${encodeURIComponent(input)}`;
+                break;
+
+            case 'local-with-subtitles':
+                url = `${PURE_BASE}?action=local-with-subtitles&file=${encodeURIComponent(input)}`;
+                break;
+
+            case 'remote-no-cache':
+                url = `${PURE_BASE}?action=remote-no-cache&url=${encodeURIComponent(input)}`;
+                break;
+
+            case 'remote-no-cache-with-subtitles':
+                url = `${PURE_BASE}?action=remote-no-cache-with-subtitles&url=${encodeURIComponent(input)}`;
+                break;
+
+            case 'remote-cache':
+                url = `${PURE_BASE}?action=remote-cache&url=${encodeURIComponent(input)}`;
+                break;
+
+            case 'remote-cache-with-subtitles':
+                url = `${PURE_BASE}?action=remote-cache-with-subtitles&url=${encodeURIComponent(input)}`;
+                break;
+
+            case 'remote-token':
+                url = `${PURE_BASE}?action=remote-token&url=${encodeURIComponent(input)}&videoId=${encodeURIComponent(videoId)}&token=${encodeURIComponent(currentToken)}`;
+                break;
+
+            case 'remote-cache-token':
+                url = `${PURE_BASE}?action=remote-cache-token&url=${encodeURIComponent(input)}&videoId=${encodeURIComponent(videoId)}&token=${encodeURIComponent(currentToken)}`;
+                break;
+
+            case 'remote-rate-limit':
+                url = `${PURE_BASE}?action=remote-rate-limit&url=${encodeURIComponent(input)}&maxConcurrent=${encodeURIComponent(maxConcurrent)}&maxPerMinute=${encodeURIComponent(maxPerMinute)}`;
+                break;
+
+            case 'remote-cache-rate-limit':
+                url = `${PURE_BASE}?action=remote-cache-rate-limit&url=${encodeURIComponent(input)}&maxConcurrent=${encodeURIComponent(maxConcurrent)}&maxPerMinute=${encodeURIComponent(maxPerMinute)}`;
+                break;
+
+            case 'remote-token-rate-limit':
+                url = `${PURE_BASE}?action=remote-token-rate-limit&url=${encodeURIComponent(input)}&videoId=${encodeURIComponent(videoId)}&token=${encodeURIComponent(currentToken)}&maxConcurrent=${encodeURIComponent(maxConcurrent)}&maxPerMinute=${encodeURIComponent(maxPerMinute)}`;
+                break;
+        }
+
+        try {
+            setStatus('Loading video source...', '');
+
+            player.pause();
+            removeAllTracks(player);
+            resetPlayer(player);
+
+            await clearEventsSilently();
+
+            if (
+                currentMode === 'local-with-subtitles' ||
+                currentMode === 'remote-no-cache-with-subtitles' ||
+                currentMode === 'remote-cache-with-subtitles'
+            ) {
+                try {
+                    await loadSubtitlesIntoPlayer(player);
+                } catch (error) {
+                    setStatus('Error loading subtitles: ' + error.message, 'error');
+                }
+            }
+
+            mountVideoSource(player, url, 'video/mp4');
+
+            await waitForPlayerReady(player);
+
+            await player.play();
+
+            setStatus('▶ Playing: ' + url, 'ok');
+            setTimeout(loadEvents, 2500);
+        } catch (error) {
+            setStatus('Error starting playback: ' + error.message, 'error');
+        }
+    }
+
+    function resetPlayer(player) {
+        player.pause();
+        player.removeAttribute('src');
+        player.removeAttribute('crossorigin');
+        player.querySelectorAll('source').forEach(source => source.remove());
+        player.load();
+    }
+
+    function mountVideoSource(player, url, mimeType = 'video/mp4') {
+        player.removeAttribute('src');
+        player.querySelectorAll('source').forEach(source => source.remove());
+
+        const source = document.createElement('source');
+        source.src = appendCacheBuster(url);
+        source.type = mimeType;
+
+        player.appendChild(source);
+        player.load();
+    }
+
+    function appendCacheBuster(url) {
+        const separator = url.includes('?') ? '&' : '?';
+        return `${url}${separator}_ts=${Date.now()}`;
+    }
+
+    function setStatus(message, type = '') {
+        const el = document.getElementById('status');
+        el.textContent = message;
+        el.className = 'status ' + type;
+    }
+
+    async function loadEvents() {
+        const box = document.getElementById('eventsBox');
+
+        try {
+            const response = await fetch(`${PURE_BASE}?action=events`);
+            const data = await response.json();
+            box.textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+            box.textContent = 'Error loading events: ' + error.message;
+        }
+    }
+
+    async function loadSubtitlesMetadata() {
+        const response = await fetch(`${PURE_BASE}?action=subtitles`);
+        const data = await response.json();
+
+        if (!response.ok || data.status !== 'ok') {
+            throw new Error(data.message || 'Failed to load subtitle metadata.');
+        }
+
+        currentSubtitles = data.tracks || [];
+        document.getElementById('subtitlesBox').textContent = JSON.stringify(data, null, 2);
+
+        return currentSubtitles;
+    }
+
+    async function loadSubtitlesIntoPlayer(player) {
+        const tracks = await loadSubtitlesMetadata();
+
+        for (const trackInfo of tracks) {
+            const track = document.createElement('track');
+            track.kind = 'subtitles';
+            track.label = trackInfo.label;
+            track.srclang = trackInfo.srclang;
+            track.src = trackInfo.src;
+
+            if (trackInfo.default) {
+                track.default = true;
+            }
+
+            player.appendChild(track);
+        }
+    }
+
+    function removeAllTracks(player) {
+        player.querySelectorAll('track').forEach(track => track.remove());
+    }
+
+        function waitForPlayerReady(player) {
+        return new Promise((resolve, reject) => {
+            const timeoutMs = 8000;
+            let finished = false;
+
+            const cleanup = () => {
+                player.removeEventListener('loadedmetadata', onReady);
+                player.removeEventListener('loadeddata', onReady);
+                player.removeEventListener('canplay', onReady);
+                player.removeEventListener('canplaythrough', onReady);
+                player.removeEventListener('error', onError);
+            };
+
+            const finishResolve = () => {
+                if (finished) return;
+                finished = true;
+                cleanup();
+                resolve();
+            };
+
+            const finishReject = (message) => {
+                if (finished) return;
+                finished = true;
+                cleanup();
+                reject(new Error(message));
+            };
+
+            const onReady = () => {
+                if (player.readyState >= 2) {
+                    finishResolve();
+                }
+            };
+
+            const onError = () => {
+                const mediaError = player.error;
+                let message = 'Unknown media error.';
+
+                if (mediaError) {
+                    switch (mediaError.code) {
+                        case MediaError.MEDIA_ERR_ABORTED:
+                            message = 'Media loading was aborted.';
+                            break;
+                        case MediaError.MEDIA_ERR_NETWORK:
+                            message = 'A network error occurred while loading the media.';
+                            break;
+                        case MediaError.MEDIA_ERR_DECODE:
+                            message = 'The media could not be decoded.';
+                            break;
+                        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+                            message = 'The media source is not supported.';
+                            break;
+                    }
+                }
+
+                finishReject(message);
+            };
+
+            if (player.readyState >= 2) {
+                finishResolve();
+                return;
+            }
+
+            player.addEventListener('loadedmetadata', onReady, { once: true });
+            player.addEventListener('loadeddata', onReady, { once: true });
+            player.addEventListener('canplay', onReady, { once: true });
+            player.addEventListener('canplaythrough', onReady, { once: true });
+            player.addEventListener('error', onError, { once: true });
+
+            setTimeout(() => {
+                if (player.readyState >= 2) {
+                    finishResolve();
+                    return;
+                }
+
+                finishReject('Timed out while waiting for the player to become ready.');
+            }, timeoutMs);
+        });
+    }
+    
+    async function generateToken(videoId, ttl = 3600) {
+        const response = await fetch(
+            `${PURE_BASE}?action=generate-token&videoId=${encodeURIComponent(videoId)}&expiresIn=${encodeURIComponent(ttl)}`
+        );
+
+        const data = await response.json();
+
+        if (!response.ok || data.status !== 'ok') {
+            throw new Error(data.message || 'Failed to generate token.');
+        }
+
+        currentTokenMeta = data;
+        document.getElementById('tokenBox').textContent = JSON.stringify(data, null, 2);
+
+        return data.token;
+    }
+
+    async function generateTokenManually() {
+        const videoId = document.getElementById('videoIdInput').value.trim();
+        const ttl = parseInt(document.getElementById('ttlInput').value.trim() || '3600', 10);
+
+        try {
+            currentToken = await generateToken(videoId, ttl);
+            setStatus('🎫 Token generated successfully.', 'ok');
+        } catch (error) {
+            setStatus('Error generating token: ' + error.message, 'error');
+        }
+    }
+
+    async function generateShortToken() {
+        const videoId = document.getElementById('videoIdInput').value.trim();
+
+        try {
+            document.getElementById('ttlInput').value = '5';
+            currentToken = await generateToken(videoId, 5);
+            setStatus('⏱️ Short 5-second token generated successfully.', 'ok');
+        } catch (error) {
+            setStatus('Error generating short token: ' + error.message, 'error');
+        }
+    }
+
+    async function revokeCurrentToken() {
+        if (!currentToken) {
+            setStatus('No current token to revoke.', 'error');
+            return;
+        }
+
+        try {
+            const response = await fetch(
+                `${PURE_BASE}?action=revoke-token&token=${encodeURIComponent(currentToken)}`
+            );
+
+            const data = await response.json();
+
+            if (!response.ok || data.status !== 'ok') {
+                throw new Error(data.message || 'Failed to revoke token.');
+            }
+
+            setStatus('🚫 Token revoked successfully.', 'ok');
+        } catch (error) {
+            setStatus('Error revoking token: ' + error.message, 'error');
+        }
+    }
+
+    async function clearEvents() {
+        const box = document.getElementById('eventsBox');
+
+        try {
+            await fetch(`${PURE_BASE}?action=clear-events`);
+            box.textContent = 'Event log cleared successfully.';
+        } catch (error) {
+            box.textContent = 'Error clearing events: ' + error.message;
+        }
+    }
+
+    async function clearEventsSilently() {
+        try {
+            await fetch(`${PURE_BASE}?action=clear-events`);
+        } catch (error) {
+            console.error('Error clearing events before play:', error);
+        }
+    }
+
+    async function clearRevokedTokens() {
+        try {
+            const response = await fetch(`${PURE_BASE}?action=clear-revoked-tokens`);
+            const data = await response.json();
+
+            if (!response.ok || data.status !== 'ok') {
+                throw new Error(data.message || 'Failed to clear revoked tokens.');
+            }
+
+            setStatus('🧼 Revoked token list cleared successfully.', 'ok');
+        } catch (error) {
+            setStatus('Error clearing revoked tokens: ' + error.message, 'error');
+        }
+    }
+</script>
+
+</body>
+</html>

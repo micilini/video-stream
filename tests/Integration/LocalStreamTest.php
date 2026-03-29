@@ -56,29 +56,6 @@ final class LocalStreamTest extends TestCase
         $this->assertInstanceOf(VideoStream::class, $result3);
     }
 
-    /**
-     * @doesNotPerformAssertions
-     */
-    public function test_legacy_api_local(): void
-    {
-        $stream = new VideoStream();
-        $path = $this->fixturePath('sample.mp4');
-
-        ob_start();
-        ob_start();
-        @$stream->streamVideo($path, ['is_localPath' => true]);
-        ob_end_clean();
-    }
-
-    public function test_legacy_api_without_is_local_path_throws(): void
-    {
-        $stream = new VideoStream();
-
-        $this->expectException(InvalidConfigException::class);
-
-        @$stream->streamVideo('/some/path.mp4', []);
-    }
-
     public function test_cache_on_local_is_ignored(): void
     {
         $stream = new VideoStream();

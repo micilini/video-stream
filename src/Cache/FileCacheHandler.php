@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Micilini\VideoStream\Cache;
 
 use Micilini\VideoStream\Contracts\CacheHandlerInterface;
+use Micilini\VideoStream\Contracts\EventDispatcherInterface;
+use Micilini\VideoStream\Events\CacheExpired;
+use Micilini\VideoStream\Events\CacheHit;
+use Micilini\VideoStream\Events\CacheMiss;
 use Micilini\VideoStream\Exceptions\CacheException;
 
 final class FileCacheHandler implements CacheHandlerInterface
@@ -15,6 +19,7 @@ final class FileCacheHandler implements CacheHandlerInterface
         private readonly string $cachePath,
         private readonly int $defaultTtl = 86400,
         private readonly int $maxDiskUsage = 10_737_418_240,
+        private readonly ?EventDispatcherInterface $eventDispatcher = null,
     ) {
         $this->ensureCacheDirectory();
     }
@@ -23,28 +28,82 @@ final class FileCacheHandler implements CacheHandlerInterface
     {
         $ttl = $ttl ?? $this->defaultTtl;
         $filePath = $this->keyToPath($url);
+        $hadFile = file_exists($filePath);
 
         if ($fresh) {
             $this->downloadToCache($url, $filePath);
+
+            $this->eventDispatcher?->dispatch(
+                $hadFile
+                    ? new CacheExpired([
+                        'url' => $url,
+                        'localPath' => $filePath,
+                        'ttl' => $ttl,
+                        'fresh' => true,
+                    ])
+                    : new CacheMiss([
+                        'url' => $url,
+                        'localPath' => $filePath,
+                        'ttl' => $ttl,
+                        'fresh' => true,
+                    ])
+            );
+
             return $filePath;
         }
 
-        if (file_exists($filePath)) {
+        if ($hadFile) {
             if (!$this->isExpired($filePath, $ttl)) {
                 @touch($filePath);
+
+                $this->eventDispatcher?->dispatch(new CacheHit([
+                    'url' => $url,
+                    'localPath' => $filePath,
+                    'ttl' => $ttl,
+                    'fresh' => false,
+                    'staleFallback' => false,
+                    'age' => time() - ((int) @filemtime($filePath)),
+                ]));
+
                 return $filePath;
             }
 
             try {
                 $this->downloadToCache($url, $filePath);
+
+                $this->eventDispatcher?->dispatch(new CacheExpired([
+                    'url' => $url,
+                    'localPath' => $filePath,
+                    'ttl' => $ttl,
+                    'fresh' => false,
+                ]));
+
                 return $filePath;
             } catch (CacheException) {
                 @touch($filePath);
+
+                $this->eventDispatcher?->dispatch(new CacheHit([
+                    'url' => $url,
+                    'localPath' => $filePath,
+                    'ttl' => $ttl,
+                    'fresh' => false,
+                    'staleFallback' => true,
+                    'age' => time() - ((int) @filemtime($filePath)),
+                ]));
+
                 return $filePath;
             }
         }
 
         $this->downloadToCache($url, $filePath);
+
+        $this->eventDispatcher?->dispatch(new CacheMiss([
+            'url' => $url,
+            'localPath' => $filePath,
+            'ttl' => $ttl,
+            'fresh' => false,
+        ]));
+
         return $filePath;
     }
 
